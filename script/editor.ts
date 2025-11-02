@@ -182,52 +182,7 @@ export class RichTextEditor {
                 tag.dataset.with = (document.getElementById('translate-with') as HTMLTextAreaElement)?.value || '';
                 break;
             case 'conditional':
-                const conditionType = (document.getElementById('conditional-type-select') as HTMLSelectElement)?.value;
-                let condition: any = {};
-
-                if (conditionType === 'selector') {
-                    const selectorInput = (document.getElementById('conditional-selector-input') as HTMLInputElement)?.value;
-                    if (selectorInput) {
-                        condition.selector = selectorInput;
-                    }
-                } else if (conditionType === 'score') {
-                    const scoreName = (document.getElementById('conditional-score-name') as HTMLInputElement)?.value;
-                    const scoreObjective = (document.getElementById('conditional-score-objective') as HTMLInputElement)?.value;
-                    const scoreValue = (document.getElementById('conditional-score-value') as HTMLInputElement)?.value;
-
-                    const scoreObj: any = {};
-                    if (scoreName) scoreObj.name = scoreName;
-                    if (scoreObjective) scoreObj.objective = scoreObjective;
-
-                    if (scoreValue) {
-                        if (scoreValue.includes('..')) {
-                            const parts = scoreValue.split('..');
-                            if (parts[0] !== '') scoreObj.min = parseInt(parts[0]);
-                            if (parts[1] !== '') scoreObj.max = parseInt(parts[1]);
-                        } else if (scoreValue.startsWith('!')) {
-                            scoreObj.not = parseInt(scoreValue.substring(1));
-                        } else {
-                            scoreObj.value = parseInt(scoreValue);
-                        }
-                    }
-
-                    if (Object.keys(scoreObj).length > 0) {
-                        condition.score = scoreObj;
-                    }
-                } else if (conditionType === 'rawjson') {
-                    const rawjsonInput = (document.getElementById('conditional-rawjson-input') as HTMLTextAreaElement)?.value;
-                    if (rawjsonInput) {
-                        try {
-                            condition = JSON.parse(rawjsonInput);
-                        } catch (e) {
-                            console.error("Invalid RawJSON condition:", e);
-                            alert("RawJSON 条件格式不正确，请检查！");
-                            return; // Stop applying edit if JSON is invalid
-                        }
-                    }
-                }
-                tag.dataset.condition = JSON.stringify(condition);
-                tag.dataset.then = (document.getElementById('conditional-then-input') as HTMLTextAreaElement)?.value || '';
+                tag.dataset.conditions = this.ui.buildConditionsData();
                 break;
         }
 
@@ -237,152 +192,17 @@ export class RichTextEditor {
     }
 
     public applySelectorEdit(): void {
-        const advancedForm = document.getElementById('selector-advanced-form');
-        const manualForm = document.getElementById('selector-manual-form');
-        let selector = '';
+        const selector = this.ui.buildSelectorStringFromModal();
 
-        if (manualForm && !manualForm.classList.contains('hidden')) {
-            // Manual mode is active
-            selector = (document.getElementById('manual-selector-input') as HTMLTextAreaElement)?.value || '';
-        } else if (advancedForm && !advancedForm.classList.contains('hidden')) {
-            // Advanced mode is active
-            const base = (document.getElementById('sel-base') as HTMLSelectElement)?.value || 'p';
-            let params: string[] = [];
-
-            const fields = ['type', 'name', 'c', 'family', 'x', 'y', 'z', 'r', 'rm', 'rx', 'rxm', 'ry', 'rym', 'dx', 'dy', 'dz', 'm', 'lm', 'l'];
-            fields.forEach(id => {
-                const el = document.getElementById(`sel-${id}`) as HTMLInputElement | HTMLSelectElement;
-                if (el && el.value !== '') { // 确保空字符串不被添加
-                    params.push(`${id}=${el.value}`);
-                }
-            });
-
-            const hasitemInput = (document.getElementById('sel-hasitem') as HTMLTextAreaElement)?.value;
-            if (hasitemInput && hasitemInput.trim() !== '') {
-                try {
-                    // 自定义解析hasitem参数
-                    const parseKeyValueString = (str: string) => {
-                        const obj: { [key: string]: string } = {};
-                        str.split(',').forEach(part => {
-                            const [key, value] = part.split('=');
-                            if (key && value) {
-                                obj[key.trim()] = value.trim();
-                            }
-                        });
-                        return obj;
-                    };
-
-                    let parsedHasitem: any;
-                    const trimmedInput = hasitemInput.trim();
-
-                    if (trimmedInput.startsWith('[') && trimmedInput.endsWith(']')) {
-                        // 处理数组形式：[{k=v,...},{k=v,...}]
-                        const innerContent = trimmedInput.substring(1, trimmedInput.length - 1);
-                        parsedHasitem = innerContent.split('},{').map(itemStr => {
-                            const cleanedItemStr = itemStr.replace(/^{|}$/g, ''); // 移除可能存在的花括号
-                            return parseKeyValueString(cleanedItemStr);
-                        });
-                    } else if (trimmedInput.startsWith('{') && trimmedInput.endsWith('}')) {
-                        // 处理单个对象形式：{k=v,...}
-                        const innerContent = trimmedInput.substring(1, trimmedInput.length - 1);
-                        parsedHasitem = parseKeyValueString(innerContent);
-                    } else {
-                        throw new Error("hasitem 参数格式不正确，必须用 {} 或 []{} 框起来。");
-                    }
-
-                    // 检查hasitem参数是否包含必要的'item'字段
-                    let isValidHasitem = true;
-                    if (Array.isArray(parsedHasitem)) {
-                        for (const condition of parsedHasitem) {
-                            if (typeof condition !== 'object' || condition === null || !condition.hasOwnProperty('item') || condition.item === '') {
-                                isValidHasitem = false;
-                                break;
-                            }
-                        }
-                    } else if (typeof parsedHasitem === 'object' && parsedHasitem !== null) {
-                        if (!parsedHasitem.hasOwnProperty('item') || parsedHasitem.item === '') {
-                            isValidHasitem = false;
-                        }
-                    } else {
-                        isValidHasitem = false; // 既不是对象也不是数组，格式不正确
-                    }
-
-                    if (!isValidHasitem) {
-                        alert("hasitem 参数中缺少必要的 'item' 字段或格式不正确，请检查！");
-                        return; // 阻止应用编辑，等待用户修正
-                    }
-
-                    // 如果解析成功且通过验证，将其作为字符串添加到参数中
-                    // 这里需要将解析后的对象/数组重新格式化回 hasitem 的字符串形式
-                    const formatKeyValueObject = (obj: { [key: string]: string }) => {
-                        const parts: string[] = [];
-                        for (const key in obj) {
-                            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                                parts.push(`${key}=${obj[key]}`);
-                            }
-                        }
-                        return `{${parts.join(',')}}`;
-                    };
-
-                    let formattedHasitem = '';
-                    if (Array.isArray(parsedHasitem)) {
-                        formattedHasitem = `[${parsedHasitem.map(item => formatKeyValueObject(item)).join(',')}]`;
-                    } else if (typeof parsedHasitem === 'object') {
-                        formattedHasitem = formatKeyValueObject(parsedHasitem);
-                    }
-
-                    params.push(`hasitem=${formattedHasitem}`);
-
-                } catch (e: any) {
-                    console.error("hasitem 参数解析失败，请检查格式", e);
-                    alert("hasitem 参数解析失败: " + e.message);
-                    return; // 阻止应用编辑，等待用户修正
-                }
+        if (this.appState.activeSelectorInputId) {
+            const inputElement = document.getElementById(this.appState.activeSelectorInputId) as HTMLInputElement;
+            if (inputElement) {
+                inputElement.value = selector;
             }
-
-            const scoresInput = (document.getElementById('sel-scores') as HTMLTextAreaElement)?.value;
-            if (scoresInput && scoresInput.trim() !== '') {
-                try {
-                    // 验证 scores 参数的格式是否为 {key=value,...}
-                    const trimmedInput = scoresInput.trim();
-                    if (!trimmedInput.startsWith('{') || !trimmedInput.endsWith('}')) {
-                        throw new Error("scores 参数格式不正确，必须用 {} 框起来。");
-                    }
-                    // 进一步验证内部格式，确保是 key=value 对
-                    const innerContent = trimmedInput.substring(1, trimmedInput.length - 1);
-                    const scorePairs = innerContent.split(',');
-                    for (const pair of scorePairs) {
-                        if (!pair.includes('=')) {
-                            throw new Error(`scores 参数中的 "${pair}" 格式不正确，应为 key=value。`);
-                        }
-                    }
-                    params.push(`scores=${trimmedInput}`);
-                } catch (e: any) {
-                    console.error("scores 参数解析失败，请检查格式", e);
-                    alert("scores 参数解析失败: " + e.message);
-                    return; // 阻止应用编辑，等待用户修正
-                }
-            }
-
-            const tagsInput = (document.getElementById('sel-tag') as HTMLInputElement)?.value;
-            const tags = tagsInput ? tagsInput.split(',').filter(t => t.trim() !== '') : [];
-            tags.forEach(t => {
-                params.push(`tag=${t.trim()}`);
-            });
-
-            selector = `@${base}`;
-            if (params.length > 0) {
-                selector += `[${params.join(',')}]`;
-            }
-        }
-
-        // 根据 currentSelectorTargetInputId 更新对应的输入框
-        if (this.ui.isSelectorTargetSet()) { // 使用公共方法判断
-            this.ui.fillSelectorInput(selector); // 调用 UI 的公共方法
+            this.appState.activeSelectorInputId = null; // Reset after use
         } else {
-            // 否则，保持原有逻辑，更新 tag.dataset.selector
             const tag = this.appState.currentEditingTag;
-            if (!tag) return; // 确保 tag 存在
+            if (!tag) return;
             tag.dataset.selector = selector;
             this.updateTagContent(tag);
         }

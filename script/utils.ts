@@ -3,9 +3,11 @@ import { UI } from './ui.js'; // 导入 UI 类，用于类型提示
 export interface AppState {
     isDarkMode: boolean;
     isMenuOpen: boolean;
-    // isModalOpen: boolean; // 不再需要这个，由 modalStack 管理
     currentEditingTag: HTMLElement | null;
-    modalStack: ModalInstance[]; // 新增模态框堆栈
+    modalStack: ModalInstance[];
+    activeSelectorInputId: string | null;
+    items: ItemData | null;
+    slots: SlotData | null;
 }
 
 export interface ModalInstance {
@@ -174,32 +176,33 @@ export const FAMILY_TYPES = [
     { name: 'zombie_villager', translation: '僵尸村民' },
 ];
 
-export let ITEMS: ItemData = {};
-export let SLOTS: SlotData = {}; 
-
-export async function loadItems(): Promise<void> {
+export async function loadItems(): Promise<ItemData> {
     try {
         const response = await fetch('static/data/items.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        ITEMS = await response.json();
-        console.log('Items loaded successfully:', Object.keys(ITEMS).length);
+        const items = await response.json();
+        console.log('Items loaded successfully:', Object.keys(items).length);
+        return items;
     } catch (error) {
         console.error('Failed to load items:', error);
+        return {};
     }
 }
 
-export async function loadSlots(): Promise<void> { 
+export async function loadSlots(): Promise<SlotData> {
     try {
         const response = await fetch('static/data/slots.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        SLOTS = await response.json();
-        console.log('Slots loaded successfully:', Object.keys(SLOTS).length);
+        const slots = await response.json();
+        console.log('Slots loaded successfully:', Object.keys(slots).length);
+        return slots;
     } catch (error) {
         console.error('Failed to load slots:', error);
+        return {};
     }
 }
 
