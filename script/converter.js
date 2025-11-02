@@ -117,53 +117,56 @@ export class JsonConverter {
         });
     }
     decodeJson(jsonInput, editor, updateTagContent, editFeature, hideModal) {
-        try {
-            const parsed = JSON.parse(jsonInput);
-            if (!parsed.rawtext || !Array.isArray(parsed.rawtext)) {
-                throw new Error("无效的 RawJSON 格式");
+        const parsed = JSON.parse(jsonInput);
+        if (!parsed.rawtext || !Array.isArray(parsed.rawtext)) {
+            throw new Error("无效的 RawJSON 格式：需要包含 'rawtext' 数组");
+        }
+        editor.innerHTML = '';
+        parsed.rawtext.forEach((item) => {
+            if (item.text !== undefined) {
+                editor.appendChild(document.createTextNode(item.text));
             }
-            editor.innerHTML = '';
-            parsed.rawtext.forEach((item) => {
-                if (item.text) {
-                    editor.appendChild(document.createTextNode(item.text));
-                }
-                else {
-                    let type;
-                    let initialDataset = {};
-                    if (item.translate === "%%2" && item.with && typeof item.with === 'object' && 'rawtext' in item.with && Array.isArray(item.with.rawtext) && item.with.rawtext.length === 2) {
-                        const withContent = item.with.rawtext;
-                        const conditionalContent = withContent[1];
-                        if (typeof conditionalContent === 'object' && conditionalContent !== null && 'rawtext' in conditionalContent) {
-                            type = 'conditional';
-                            initialDataset = {
-                                condition: JSON.stringify(withContent[0] || {}),
-                                then: JSON.stringify(conditionalContent.rawtext || [])
-                            };
-                        }
-                    }
-                    else if (item.score) {
-                        type = 'score';
-                        initialDataset = { name: item.score.name, objective: item.score.objective };
-                    }
-                    else if (item.selector) {
-                        type = 'selector';
-                        initialDataset = { selector: item.selector };
-                    }
-                    else if (item.translate) {
-                        type = 'translate';
-                        initialDataset = { translate: item.translate, with: JSON.stringify(item.with || []) };
-                    }
-                    if (type) {
-                        const tag = createFunctionTag(type, initialDataset, updateTagContent, editFeature);
-                        editor.appendChild(tag);
+            else {
+                let type;
+                let initialDataset = {};
+                if (item.translate === "%%2" && item.with && typeof item.with === 'object' && 'rawtext' in item.with && Array.isArray(item.with.rawtext) && item.with.rawtext.length === 2) {
+                    const withContent = item.with.rawtext;
+                    const conditionalContent = withContent[1];
+                    if (typeof conditionalContent === 'object' && conditionalContent !== null && 'rawtext' in conditionalContent) {
+                        type = 'conditional';
+                        // Dataset values are stored as DOM properties, not HTML, so they're safe from XSS
+                        // Sanitization happens when these values are displayed in modal HTML templates
+                        initialDataset = {
+                            condition: JSON.stringify(withContent[0] || {}),
+                            then: JSON.stringify(conditionalContent.rawtext || [])
+                        };
                     }
                 }
-            });
-            this.generateJson();
-            hideModal();
-        }
-        catch (e) {
-            alert("JSON 解析失败: " + e.message);
-        }
+                else if (item.score) {
+                    type = 'score';
+                    initialDataset = {
+                        name: item.score.name || '',
+                        objective: item.score.objective || ''
+                    };
+                }
+                else if (item.selector) {
+                    type = 'selector';
+                    initialDataset = { selector: item.selector };
+                }
+                else if (item.translate) {
+                    type = 'translate';
+                    initialDataset = {
+                        translate: item.translate,
+                        with: JSON.stringify(item.with || [])
+                    };
+                }
+                if (type) {
+                    const tag = createFunctionTag(type, initialDataset, updateTagContent, editFeature);
+                    editor.appendChild(tag);
+                }
+            }
+        });
+        this.generateJson();
+        hideModal();
     }
 }
