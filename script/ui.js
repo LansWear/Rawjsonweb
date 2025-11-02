@@ -44,7 +44,12 @@ export class UI {
     }
     initModals() {
         document.getElementById('about-btn')?.addEventListener('click', (e) => { e.preventDefault(); this.modalManager.show(this.getAboutModalContent()); });
-        document.getElementById('decode-json-btn')?.addEventListener('click', (e) => { e.preventDefault(); this.modalManager.show(this.getDecodeModalContent()); });
+        document.getElementById('decode-json-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.modalManager.show(this.getDecodeModalContent());
+            // Add handler for the decode button after modal is shown
+            setTimeout(() => this.attachDecodeHandler(), 0);
+        });
         // 移除模态框背景监听，现在由 ModalManager 管理
         // document.getElementById('modal-backdrop')?.addEventListener('click', () => this.hideModal());
         document.getElementById('copy-json-btn')?.addEventListener('click', () => this.copyJson());
@@ -52,6 +57,41 @@ export class UI {
     // showModal 和 hideModal 方法被 ModalManager 替代
     // public showModal(content: string, isSubModal: boolean = false): void { ... }
     // public hideModal(isSubModal: boolean = false): void { ... }
+    attachDecodeHandler() {
+        const decodeBtn = document.getElementById('decode-json-execute-btn');
+        const errorDisplay = document.getElementById('decode-error-message');
+        if (decodeBtn) {
+            decodeBtn.addEventListener('click', () => {
+                const textarea = document.getElementById('json-input-area');
+                const editor = document.getElementById('richTextEditor');
+                if (!textarea || !editor) {
+                    console.error('Required elements not found');
+                    return;
+                }
+                const jsonInput = textarea.value.trim();
+                if (!jsonInput) {
+                    this.showDecodeError('请输入 JSON 内容');
+                    return;
+                }
+                if (errorDisplay) {
+                    errorDisplay.classList.add('hidden');
+                }
+                try {
+                    this.jsonConverter.decodeJson(jsonInput, editor, this.updateTagContent, this.editFeature, () => this.hideCurrentModal());
+                }
+                catch (error) {
+                    this.showDecodeError(error.message || 'JSON 解析失败');
+                }
+            });
+        }
+    }
+    showDecodeError(message) {
+        const errorDisplay = document.getElementById('decode-error-message');
+        if (errorDisplay) {
+            errorDisplay.textContent = message;
+            errorDisplay.classList.remove('hidden');
+        }
+    }
     renderColorButtons(insertCode) {
         const container = document.getElementById('colorButtons');
         if (!container)
@@ -141,8 +181,9 @@ export class UI {
                     <h2 class="text-2xl font-bold text-gray-900 dark:text-white">解析 JSON</h2>
                     <button class="close-modal-btn text-gray-400 hover:text-gray-700 dark:hover:text-white text-2xl">&times;</button>
                 </div>
+                <div id="decode-error-message" class="hidden mb-4 p-3 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded"></div>
                 <textarea id="json-input-area" class="w-full h-40 p-2 border border-gray-300 dark:border-gray-600 rounded mb-4 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200" placeholder="在此粘贴你的 RawJSON..."></textarea>
-                <button onclick="window.App.JsonLogic.decodeJson()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">解析</button>
+                <button id="decode-json-execute-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">解析</button>
             </div>
         `;
     }

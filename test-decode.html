@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Decode Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .test-pass { color: green; font-weight: bold; }
+        .test-fail { color: red; font-weight: bold; }
+        .function-tag {
+            display: inline-block;
+            background-color: #e0e0e0;
+            color: #333;
+            padding: 2px 6px;
+            margin: 0 2px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <h1 class="text-3xl font-bold mb-6">JSON Decode Tests</h1>
+    
+    <div id="test-results" class="space-y-4"></div>
+    
+    <!-- Hidden editor for testing -->
+    <div id="richTextEditor" contenteditable="true" style="display: none;"></div>
+    <div id="jsonOutput" style="display: none;"></div>
+    <div id="preview" style="display: none;"></div>
+
+    <script type="module">
+        import { AppState, ModalManager } from './script/utils.js';
+        import { JsonConverter } from './script/converter.js';
+        import { RichTextEditor } from './script/editor.js';
+        import { UI } from './script/ui.js';
+
+        const resultsDiv = document.getElementById('test-results');
+        
+        function log(message, isPass = true) {
+            const p = document.createElement('p');
+            p.className = isPass ? 'test-pass' : 'test-fail';
+            p.textContent = (isPass ? '✓ ' : '✗ ') + message;
+            resultsDiv.appendChild(p);
+        }
+
+        function logInfo(message) {
+            const p = document.createElement('p');
+            p.textContent = '  ' + message;
+            resultsDiv.appendChild(p);
+        }
+
+        // Setup
+        const appState = {
+            isDarkMode: false,
+            isMenuOpen: false,
+            currentEditingTag: null,
+            modalStack: []
+        };
+
+        const jsonConverter = new JsonConverter();
+        const modalManager = new ModalManager();
+        const editor = document.getElementById('richTextEditor');
+
+        let updateTagContentCallCount = 0;
+        let editFeatureCallCount = 0;
+        let hideModalCallCount = 0;
+
+        const updateTagContent = (tag) => {
+            updateTagContentCallCount++;
+            tag.textContent = `[${tag.dataset.type}]`;
+        };
+        
+        const editFeature = (tag) => {
+            editFeatureCallCount++;
+        };
+        
+        const hideModal = () => {
+            hideModalCallCount++;
+        };
+
+        // Test 1: Valid RawJSON with text
+        try {
+            log('Test 1: Decode valid RawJSON with plain text');
+            editor.innerHTML = '';
+            hideModalCallCount = 0;
+            
+            const validJson = JSON.stringify({
+                rawtext: [
+                    { text: "Hello World" },
+                    { text: " Test" }
+                ]
+            });
+            
+            jsonConverter.decodeJson(validJson, editor, updateTagContent, editFeature, hideModal);
+            
+            if (editor.textContent === "Hello World Test") {
+                log('  Plain text decoded correctly', true);
+            } else {
+                log('  Plain text decode failed. Got: ' + editor.textContent, false);
+            }
+            
+            if (hideModalCallCount === 1) {
+                log('  Modal hide callback called', true);
+            } else {
+                log('  Modal hide callback not called correctly', false);
+            }
+        } catch (e) {
+            log('Test 1 FAILED: ' + e.message, false);
+        }
+
+        // Test 2: Valid RawJSON with selector
+        try {
+            log('Test 2: Decode RawJSON with selector');
+            editor.innerHTML = '';
+            updateTagContentCallCount = 0;
+            
+            const selectorJson = JSON.stringify({
+                rawtext: [
+                    { selector: "@p" }
+                ]
+            });
+            
+            jsonConverter.decodeJson(selectorJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            if (tags.length === 1 && tags[0].dataset.type === 'selector' && tags[0].dataset.selector === '@p') {
+                log('  Selector tag created correctly', true);
+            } else {
+                log('  Selector tag creation failed', false);
+            }
+            
+            if (updateTagContentCallCount > 0) {
+                log('  updateTagContent callback called', true);
+            } else {
+                log('  updateTagContent callback not called', false);
+            }
+        } catch (e) {
+            log('Test 2 FAILED: ' + e.message, false);
+        }
+
+        // Test 3: Valid RawJSON with score
+        try {
+            log('Test 3: Decode RawJSON with score');
+            editor.innerHTML = '';
+            
+            const scoreJson = JSON.stringify({
+                rawtext: [
+                    { score: { name: "@s", objective: "points" } }
+                ]
+            });
+            
+            jsonConverter.decodeJson(scoreJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            if (tags.length === 1 && 
+                tags[0].dataset.type === 'score' && 
+                tags[0].dataset.name === '@s' && 
+                tags[0].dataset.objective === 'points') {
+                log('  Score tag created correctly', true);
+            } else {
+                log('  Score tag creation failed', false);
+            }
+        } catch (e) {
+            log('Test 3 FAILED: ' + e.message, false);
+        }
+
+        // Test 4: Valid RawJSON with translate
+        try {
+            log('Test 4: Decode RawJSON with translate');
+            editor.innerHTML = '';
+            
+            const translateJson = JSON.stringify({
+                rawtext: [
+                    { translate: "welcome.message", with: [{"text":"Player"}] }
+                ]
+            });
+            
+            jsonConverter.decodeJson(translateJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            if (tags.length === 1 && 
+                tags[0].dataset.type === 'translate' && 
+                tags[0].dataset.translate === 'welcome.message') {
+                log('  Translate tag created correctly', true);
+            } else {
+                log('  Translate tag creation failed', false);
+            }
+        } catch (e) {
+            log('Test 4 FAILED: ' + e.message, false);
+        }
+
+        // Test 5: Invalid JSON
+        try {
+            log('Test 5: Attempt to decode invalid JSON');
+            editor.innerHTML = '';
+            
+            const invalidJson = "{ invalid json }";
+            
+            try {
+                jsonConverter.decodeJson(invalidJson, editor, updateTagContent, editFeature, hideModal);
+                log('  Should have thrown an error', false);
+            } catch (e) {
+                log('  Correctly threw error for invalid JSON', true);
+                logInfo('  Error message: ' + e.message);
+            }
+        } catch (e) {
+            log('Test 5 FAILED: ' + e.message, false);
+        }
+
+        // Test 6: JSON without rawtext array
+        try {
+            log('Test 6: Attempt to decode JSON without rawtext array');
+            editor.innerHTML = '';
+            
+            const noRawtextJson = JSON.stringify({ text: "Hello" });
+            
+            try {
+                jsonConverter.decodeJson(noRawtextJson, editor, updateTagContent, editFeature, hideModal);
+                log('  Should have thrown an error', false);
+            } catch (e) {
+                log('  Correctly threw error for missing rawtext', true);
+                logInfo('  Error message: ' + e.message);
+            }
+        } catch (e) {
+            log('Test 6 FAILED: ' + e.message, false);
+        }
+
+        // Test 7: XSS safety through dataset API
+        try {
+            log('Test 7: XSS safety through dataset API');
+            editor.innerHTML = '';
+            
+            const xssJson = JSON.stringify({
+                rawtext: [
+                    { selector: "@p[name=\"<script>alert('xss')</script>\"]" }
+                ]
+            });
+            
+            jsonConverter.decodeJson(xssJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            if (tags.length === 1) {
+                const selectorValue = tags[0].dataset.selector;
+                // Dataset values are stored as-is because they're DOM properties, not HTML
+                // The value should be preserved exactly for correct JSON generation
+                if (selectorValue === "@p[name=\"<script>alert('xss')</script>\"]") {
+                    log('  Dataset value preserved correctly', true);
+                    logInfo('  Value stored as DOM property, safe from XSS');
+                } else {
+                    log('  Dataset value corrupted', false);
+                    logInfo('  Expected: @p[name="<script>alert(\'xss\')</script>"]');
+                    logInfo('  Got: ' + selectorValue);
+                }
+                // The XSS protection comes from using textContent, not innerHTML
+                if (tags[0].textContent && !tags[0].innerHTML.includes('<script>')) {
+                    log('  Tag text content safe (no script execution)', true);
+                } else {
+                    log('  Tag content safety check failed', false);
+                }
+            } else {
+                log('  Tag creation failed', false);
+            }
+        } catch (e) {
+            log('Test 7 FAILED: ' + e.message, false);
+        }
+
+        // Test 8: Complex RawJSON with mixed content
+        try {
+            log('Test 8: Decode complex RawJSON with mixed content');
+            editor.innerHTML = '';
+            
+            const complexJson = JSON.stringify({
+                rawtext: [
+                    { text: "Score: " },
+                    { score: { name: "@p", objective: "kills" } },
+                    { text: " for " },
+                    { selector: "@a" }
+                ]
+            });
+            
+            jsonConverter.decodeJson(complexJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            const textContent = editor.textContent;
+            
+            if (tags.length === 2 && textContent.includes('Score: ') && textContent.includes(' for ')) {
+                log('  Complex JSON decoded correctly', true);
+            } else {
+                log('  Complex JSON decode failed', false);
+                logInfo('  Found ' + tags.length + ' tags');
+            }
+        } catch (e) {
+            log('Test 8 FAILED: ' + e.message, false);
+        }
+
+        // Test 9: Conditional block
+        try {
+            log('Test 9: Decode RawJSON with conditional block');
+            editor.innerHTML = '';
+            
+            const conditionalJson = JSON.stringify({
+                rawtext: [
+                    {
+                        translate: "%%2",
+                        with: {
+                            rawtext: [
+                                { selector: "@p" },
+                                { rawtext: [{ text: "Success!" }] }
+                            ]
+                        }
+                    }
+                ]
+            });
+            
+            jsonConverter.decodeJson(conditionalJson, editor, updateTagContent, editFeature, hideModal);
+            
+            const tags = editor.querySelectorAll('.function-tag');
+            if (tags.length === 1 && tags[0].dataset.type === 'conditional') {
+                log('  Conditional block decoded correctly', true);
+                
+                // Verify sanitization of condition and then datasets
+                const condition = tags[0].dataset.condition;
+                const then = tags[0].dataset.then;
+                
+                if (condition && then) {
+                    log('  Condition and then blocks stored', true);
+                } else {
+                    log('  Condition or then blocks missing', false);
+                }
+            } else {
+                log('  Conditional block decode failed', false);
+            }
+        } catch (e) {
+            log('Test 9 FAILED: ' + e.message, false);
+        }
+
+        log('\n--- All tests completed ---', true);
+    </script>
+</body>
+</html>
